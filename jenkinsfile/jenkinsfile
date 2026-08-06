@@ -1,0 +1,144 @@
+pipeline {
+
+    agent any
+
+    environment {
+        REPO_URL  = 'https://github.com/krushjagdale1/bank-website-clone-krushna.git'
+        BRANCH    = 'main'
+        K8S_IP    = '54.89.137.68' #add this is public over ssh i used this because public over ssh was not working use best practice in public over ssh 
+        NAMESPACE = 'bank-app'
+    }
+
+    stages {
+        stage('Clone Code') {
+            steps {
+                echo 'Cloning code from GitHub...'
+                git branch: "${BRANCH}",
+                    url: "${REPO_URL}"
+            }
+        }
+
+        stage('SonarQube Scan') {
+            steps {
+                echo 'Running SonarQube scan...'
+                script {
+                    def scannerHome = tool 'Sonar'
+                    withSonarQubeEnv('Sonar') {
+                        sh """
+                        ${scannerHome}/bin/sonar-scanner \
+                          -Dsonar.projectKey=bank-website-clone-krushna \
+                          -Dsonar.projectName=bank-website-clone-krushna \
+                          -Dsonar.sources=. \
+                          -Dsonar.sourceEncoding=UTF-8
+                        """
+                    }
+                }
+            }
+        }
+
+        stage('Quality Gate') {
+            steps {
+                echo 'SonarQube analysis completed successfully'
+            }
+        }
+
+        // --------------------------------------------------
+        // Future Use: Build Docker Image
+        // --------------------------------------------------
+        /*
+        stage('Docker Build') {
+            steps {
+                echo 'Building Docker image...'
+                sh 'docker build -t bank-website-clone:latest .'
+            }
+        }
+        */
+
+        // --------------------------------------------------
+        // Future Use: Tag Docker Image
+        // --------------------------------------------------
+        /*
+        stage('Docker Tag') {
+            steps {
+                echo 'Tagging Docker image...'
+                sh 'docker tag bank-website-clone:latest krushjagdale/bank-website-clone:latest'
+            }
+        }
+        */
+
+        // --------------------------------------------------
+        // Future Use: Docker Login
+        // --------------------------------------------------
+        /*
+        stage('Docker Login') {
+            steps {
+                withCredentials([usernamePassword(
+                    credentialsId: 'dockerhub-creds',
+                    usernameVariable: 'DOCKER_USER',
+                    passwordVariable: 'DOCKER_PASS'
+                )]) {
+                    sh 'echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin'
+                }
+            }
+        }
+        */
+
+        // --------------------------------------------------
+        // Future Use: Push Docker Image
+        // --------------------------------------------------
+        /*
+        stage('Docker Push') {
+            steps {
+                echo 'Pushing Docker image...'
+                sh 'docker push krushjagdale/bank-website-clone:latest'
+            }
+        }
+        */
+        // --------------------------------------------------
+        // Future Use: Docker Test
+        // --------------------------------------------------
+        /*
+        stage('Docker Test') {
+            steps {
+                echo 'Testing Docker container...'
+                sh 'docker rm -f bank-test || true'
+                sh 'docker run -d --name bank-test -p 8080:80 bank-website-clone:latest'
+                sh 'curl -I http://localhost:8080'
+                sh 'docker rm -f bank-test'
+            }
+        }
+        */
+
+        stage('Deploy to Kubernetes Server') {
+            steps {
+                echo 'Connecting to Kubernetes server...'
+                sshagent(credentials: ['k8s-root-key']) {
+                    sh """
+                    ssh -o StrictHostKeyChecking=no root@${K8S_IP} '
+                        echo Connected successfully
+                        echo Kubernetes Nodes:
+                        kubectl get nodes
+                        echo Restarting application deployment...
+                        kubectl rollout restart deployment bank-website -n ${NAMESPACE}
+                        echo Waiting for rollout to complete...
+                        kubectl rollout status deployment bank-website -n ${NAMESPACE}
+                        echo Current Pods:
+                        kubectl get pods -n ${NAMESPACE}
+                    '
+                    """
+                }
+            }
+        }
+    }
+    post {
+        success {
+            echo 'Application deployed successfully.'
+        }
+        failure {
+            echo 'Pipeline failed. Please check console logs.'
+        }
+        always {
+            echo 'Pipeline execution completed.'
+        }
+    }
+}

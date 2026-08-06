@@ -5,7 +5,7 @@ pipeline {
     environment {
         REPO_URL  = 'https://github.com/krushjagdale1/bank-website-clone-krushna.git'
         BRANCH    = 'main'
-        K8S_IP    = '54.89.137.68' #add this is public over ssh i used this because public over ssh was not working use best practice in public over ssh 
+        K8S_IP    = '<master-public-ip>' #add this is public over ssh i used this because public over ssh was not working use best practice in public over ssh 
         NAMESPACE = 'bank-app'
     }
 
